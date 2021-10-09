@@ -2,6 +2,14 @@
 from tensorflow.keras import layers
 import tensorflow as tf
 
+
+train_parans = {
+    
+}
+
+
+
+
 def generator( latent_dim, leaky_relu_alpha = 0.3 ):
 
     ip = layers.Input(shape=(latent_dim,))

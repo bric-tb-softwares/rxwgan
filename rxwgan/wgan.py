@@ -4,7 +4,7 @@ __all__ = ['wgan']
 import logging
 import numpy as np
 import tensorflow as tf
-
+from tqdm import tqdm
 
 def declare_property( cls, kw, name, value , private=False):
   atribute = ('__' + name ) if private else name
@@ -12,6 +12,8 @@ def declare_property( cls, kw, name, value , private=False):
     setattr(cls,atribute, kw[name])
   else:
     setattr(cls,atribute, value)
+
+
 
 
 class wgan(object):
