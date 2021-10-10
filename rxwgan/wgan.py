@@ -5,40 +5,35 @@ import logging
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
-
-def declare_property( cls, kw, name, value , private=False):
-  atribute = ('__' + name ) if private else name
-  if name in kw.keys():
-    setattr(cls,atribute, kw[name])
-  else:
-    setattr(cls,atribute, value)
+from rxwgan.utils import declare_property
 
 
 
 
 class wgan(object):
 
-  def __init__(self, generator, discriminator, **kw ):
+  def __init__(self, model, **kw ):
 
-    declare_property(self, kw, 'height'              , 128                       )
-    declare_property(self, kw, 'width'               , 128                       )
     declare_property(self, kw, 'max_epochs'          , 1000                      )
     declare_property(self, kw, 'batch_size'          , 3                         ) 
     declare_property(self, kw, 'n_discr'             , 0                         )
     declare_property(self, kw, 'save_interval'       , 9                         ) 
     declare_property(self, kw, 'use_gradient_penalty', True                      )
-    declare_property(self, kw, 'verbose'             , True                      )
-    declare_property(self, kw, 'leaky_relu_alpha'    , 0.3                       )
     declare_property(self, kw, 'grad_weight'         , 10.0                      )
-    declare_property(self, kw, 'latent_dim'          , 100                       )
     declare_property(self, kw, 'gen_optimizer'       , tf.optimizers.Adam(lr=1e-4, beta_1=0.5, decay=1e-4 )     )
     declare_property(self, kw, 'discr_optimizer'     , tf.optimizers.Adam(lr=1e-4, beta_1=0.5, decay=1e-4 )     )
 
 
     # Initialize discriminator and generator networks
-    self.discriminator = discriminator
-    self.generator     = generator
+    self.discriminator = model.discriminator
+    self.generator     = model.generator
+    self.latent_dim    = model.latent_dim
+    self.height        = model.height
+    self.width         = model.width
 
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    n_gpus = len(gpus)
+    print('This machine has %i GPUs.' % n_gpus)
 
   #
   # Train models
@@ -46,24 +41,23 @@ class wgan(object):
   def train(self, train_generator ):
 
 
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    n_gpus = len(gpus)
-
-    print('This machine has %i GPUs.' % n_gpus)
-
+  
  
- 
-    # containers for losses
-    losses = {'discr': [], 'generator': [], 'regularizer': []}
-    discr_acc = []
+    history = {
+                'discr_loss' : [],
+                'gen_loss'   : [],
+                'reg'        : [],
+    }
+
 
     updates = 0
-    batches = 0
-
 
     for epoch in range(self.max_epochs):
 
-      for data_batch, target_batch in train_generator:
+
+      for batch_idx, (data_batch, _) in tqdm( enumerate(train_generator) , 'Epoch %d'%epoch): 
+
+        print(batch_idx)
 
         if self.n_discr and ( (updates % self.n_discr)==0 ):
           # Update only discriminator
@@ -73,20 +67,20 @@ class wgan(object):
           # Update discriminator and generator
           discr_loss, gen_loss, reg_loss = self.train_discr_and_gen(data_batch)
 
-
-        losses['discr'].append(discr_loss)
-        losses['generator'].append(gen_loss)
-        losses['regularizer'].append(reg_loss)
-
+        # save last values
+        #if batch_idx == train_generator.batch_size:
+        #  history['discr_loss'].append(discr_loss)
+        #  history['gen_loss'].append(gen_loss)
+        #  history['reg'].append(reg_loss)
         updates += 1
+        # end of batch
 
-        if self.verbose and (updates % 25)==0 :
-          perc = np.around(100*epoch/self.max_epochs, decimals=1)
-          print('Epoch: %i. Updates %i. Training %1.1f%% complete. discr_loss: %.3f. Gen_loss: %.3f. Regularizer: %.3f'
-               % (epoch, updates, perc, discr_loss, gen_loss, reg_loss ))
+      perc = np.around(100*epoch/self.max_epochs, decimals=1)
+      print('Epoch: %i. Training %1.1f%% complete. discr_loss: %.3f. Gen_loss: %.3f. Regularizer: %.3f'
+               % (epoch, perc, history['discr_loss'][-1], history['gen_loss'][-1], history['reg_loss'][-1] ))
 
 
-    return losses
+    return history
 
 
 
