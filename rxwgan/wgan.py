@@ -241,7 +241,7 @@ class wgan_optimizer(object):
        plt.imshow(fake_samples[i],cmap='gray')
     if self.notebook:
       plt.show()
-    fig.savefig(self.output + '/fake_samples_epoch_%d.pdf'%epoch,)
+    fig.savefig(output + '/fake_samples_epoch_%d.pdf'%epoch,)
 
     if epoch > 0: # no make sense to save since the begginer
       self.plot_evolution(self.history, output+'/evolution_%d.pdf'%epoch)

@@ -16,9 +16,9 @@ class Model_v1( object ):
       self.width      = 128
       self.leaky_relu_alpha = 0.3
 
-      self.compile_generator()
-      self.generator.summary()
       if trainable:
+        self.compile_generator()
+        self.generator.summary()
         self.compile_discriminator()
         self.discriminator.summary()
 
@@ -29,14 +29,13 @@ class Model_v1( object ):
   #
   def save(self, output_path):
     self.generator.save(output_path + '/generator.h5')
-    if self.trainable:
-        self.discriminator.save(output_path + '/discriminator.h5')
+    self.discriminator.save(output_path + '/discriminator.h5')
     
 
   def load(self, input_path ):
-    self.generator.load( input_path + '/generator.h5' )
-    if self.trainable:
-      self.discriminator.load(input_path + '/discriminator.h5')
+    self.generator = tf.keras.models.load_model(input_path + '/generator.h5')
+    self.discriminator = tf.keras.models.load_model(input_path + '/discriminator.h5')
+
 
 
   @tf.function
