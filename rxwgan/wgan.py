@@ -1,28 +1,36 @@
 
-__all__ = ['wgan']
+__all__ = ['wgan_optimizer']
 
 import logging
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from rxwgan.utils import declare_property
+import matplotlib.pyplot as plt
+import os
+import json
+
+
+import atlas_mpl_style as ampl
+ampl.use_atlas_style()
 
 
 
-
-class wgan(object):
+class wgan_optimizer(object):
 
   def __init__(self, model, **kw ):
 
     declare_property(self, kw, 'max_epochs'          , 1000                      )
-    declare_property(self, kw, 'batch_size'          , 3                         ) 
     declare_property(self, kw, 'n_discr'             , 0                         )
     declare_property(self, kw, 'save_interval'       , 9                         ) 
     declare_property(self, kw, 'use_gradient_penalty', True                      )
     declare_property(self, kw, 'grad_weight'         , 10.0                      )
     declare_property(self, kw, 'gen_optimizer'       , tf.optimizers.Adam(lr=1e-4, beta_1=0.5, decay=1e-4 )     )
     declare_property(self, kw, 'discr_optimizer'     , tf.optimizers.Adam(lr=1e-4, beta_1=0.5, decay=1e-4 )     )
-
+    declare_property(self, kw, 'disp_for_each'       , 0                         )
+    declare_property(self, kw, 'save_for_each'       , 0                         )
+    declare_property(self, kw, 'output_dir'          , 'output'                  )
+    declare_property(self, kw, 'notebook'            , True                      )
 
     # Initialize discriminator and generator networks
     self.discriminator = model.discriminator
@@ -30,10 +38,13 @@ class wgan(object):
     self.latent_dim    = model.latent_dim
     self.height        = model.height
     self.width         = model.width
-
+    self.model         = model
     gpus = tf.config.experimental.list_physical_devices('GPU')
     n_gpus = len(gpus)
     print('This machine has %i GPUs.' % n_gpus)
+
+
+ 
 
   #
   # Train models
@@ -41,46 +52,68 @@ class wgan(object):
   def train(self, train_generator ):
 
 
-  
- 
-    history = {
+    output = os.getcwd()+'/'+self.output_dir
+    if not os.path.exists(output): os.makedirs(output)
+
+
+    self.history = {
                 'discr_loss' : [],
                 'gen_loss'   : [],
                 'reg'        : [],
     }
 
 
-    updates = 0
 
     for epoch in range(self.max_epochs):
 
+      batches = 0
+      vec_discr_loss = []
+      vec_gen_loss = []
+      vec_reg_loss = []
 
-      for batch_idx, (data_batch, _) in tqdm( enumerate(train_generator) , 'Epoch %d'%epoch): 
+      for data_batch, _ in tqdm( train_generator , desc= 'training: ', ncols=60): 
 
-        print(batch_idx)
-
-        if self.n_discr and ( (updates % self.n_discr)==0 ):
+        if self.n_discr and not ( (batches % self.n_discr)==0 ):
           # Update only discriminator
           discr_loss, reg_loss, gen_loss = self.train_discr(data_batch) + (np.nan,)
-
-        if not(self.n_discr) or not( (updates % self.n_discr)==0 ):
+        else:
           # Update discriminator and generator
           discr_loss, gen_loss, reg_loss = self.train_discr_and_gen(data_batch)
+        
+        batches += 1
+
+        # accumulate
+        vec_discr_loss.append(discr_loss)
+        vec_gen_loss.append(gen_loss)
+        vec_reg_loss.append(reg_loss)
 
         # save last values
-        #if batch_idx == train_generator.batch_size:
-        #  history['discr_loss'].append(discr_loss)
-        #  history['gen_loss'].append(gen_loss)
-        #  history['reg'].append(reg_loss)
-        updates += 1
+        if batches > len(train_generator):
+          break
+        
+        
         # end of batch
 
+      # Update the history
+      self.history['discr_loss'].append( np.mean(vec_discr_loss) ) # wasserstein loss
+      self.history['gen_loss'].append( np.mean(vec_gen_loss) )
+      self.history['reg'].append( np.mean(vec_reg_loss) )
+      
       perc = np.around(100*epoch/self.max_epochs, decimals=1)
       print('Epoch: %i. Training %1.1f%% complete. discr_loss: %.3f. Gen_loss: %.3f. Regularizer: %.3f'
-               % (epoch, perc, history['discr_loss'][-1], history['gen_loss'][-1], history['reg_loss'][-1] ))
+               % (epoch, perc, self.history['discr_loss'][-1], self.history['gen_loss'][-1], 
+                  self.history['reg'][-1] ))
 
 
-    return history
+      if self.disp_for_each and ( (epoch % self.disp_for_each)==0 ):
+        self.display(epoch, output)
+
+      if self.save_for_each and ( (epoch % self.save_for_each)==0 ):
+        self.model.save(output)
+
+    # just to be sure!
+    self.model.save(output)
+    return self.history
 
 
 
@@ -89,9 +122,9 @@ class wgan(object):
   #
   @tf.function
   def gradient_penalty(self, x, x_hat): 
-
+    batch_size = x.shape[0]
     # 0.0 <= epsilon <= 1.0
-    epsilon = tf.random.uniform((self.batch_size, self.height, self.width, 1), 0.0, 1.0) 
+    epsilon = tf.random.uniform((batch_size, self.height, self.width, 1), 0.0, 1.0) 
     # Google Search - u_hat is a randomly weighted average between a real and generated sample
     u_hat = epsilon * x + (1 - epsilon) * x_hat 
     with tf.GradientTape() as penalty_tape:
@@ -108,9 +141,9 @@ class wgan(object):
   # Calculate discriminator output
   #
   @tf.function
-  def calculate_discr_output( self, samples, fake_samples ):
+  def calculate_discr_output( self, real_samples, fake_samples ):
     # calculate discr outputs
-    real_output = self.discriminator(samples)
+    real_output = self.discriminator(real_samples)
     fake_output = self.discriminator(fake_samples)
     return real_output, fake_output
 
@@ -126,8 +159,8 @@ class wgan(object):
   # Calculate the discriminator loss
   #
   @tf.function
-  def calculate_discr_loss( self, samples, fake_samples, real_output, fake_output ):
-    grad_regularizer_loss = tf.multiply(tf.constant(self.grad_weight), self.gradient_penalty(samples, fake_samples)) if self.use_gradient_penalty else 0
+  def calculate_discr_loss( self, real_samples, fake_samples, real_output, fake_output ):
+    grad_regularizer_loss = tf.multiply(tf.constant(self.grad_weight), self.gradient_penalty(real_samples, fake_samples)) if self.use_gradient_penalty else 0
     discr_loss = tf.add( self.wasserstein_loss(real_output, fake_output), grad_regularizer_loss )
     return discr_loss, grad_regularizer_loss
 
@@ -153,14 +186,15 @@ class wgan(object):
   # discr = Discriminator; Tries to distinguish real data from the data created by the generator
   #
   @tf.function
-  def train_discr(self, samples): 
+  def train_discr(self, real_samples): 
     
     with tf.GradientTape() as discr_tape:
-      fake_samples = self.generate( self.batch_size )
+      batch_size = real_samples.shape[0]
+      fake_samples = self.generate( batch_size )
       # real_output => output from real samples;fake_output => output from fake samples
-      real_output, fake_output = self.calculate_discr_output( samples, fake_samples ) 
+      real_output, fake_output = self.calculate_discr_output( real_samples, fake_samples ) 
       # discr loss => wasserstein loss between real output and fake output + regularizer
-      discr_loss, grad_regularizer_loss = self.calculate_discr_loss( samples, fake_samples, real_output, fake_output) 
+      discr_loss, grad_regularizer_loss = self.calculate_discr_loss( real_samples, fake_samples, real_output, fake_output) 
     
     # discr_tape
     # Backpropagation(negative feedback??) to improve weights of the discr?
@@ -172,12 +206,13 @@ class wgan(object):
   #
   #
   @tf.function
-  def train_discr_and_gen(self, samples):
+  def train_discr_and_gen(self, real_samples):
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as discr_tape:
-      fake_samples = self.generate( self.batch_size )
-      real_output, fake_output = self.calculate_discr_output( samples, fake_samples )
-      discr_loss, discr_regularizer = self.calculate_discr_loss( samples, fake_samples, real_output, fake_output)
+      batch_size = real_samples.shape[0]
+      fake_samples = self.generate( batch_size )
+      real_output, fake_output = self.calculate_discr_output( real_samples, fake_samples )
+      discr_loss, discr_regularizer = self.calculate_discr_loss( real_samples, fake_samples, real_output, fake_output)
       # gen_loss => Variable to improve the generator to try to make discr classify its fake samples as real;
       gen_loss = self.calculate_gen_loss( fake_samples, fake_output ) 
     
@@ -195,3 +230,34 @@ class wgan(object):
   
 
 
+  def display(self, epoch, output):
+
+    # disp plot
+    fake_samples = self.generate(25)
+    fig = plt.figure(figsize=(10, 10))
+    for i in range(25):
+       plt.subplot(5,5,1+i)
+       plt.axis('off')
+       plt.imshow(fake_samples[i],cmap='gray')
+    if self.notebook:
+      plt.show()
+    fig.savefig(self.output + '/fake_samples_epoch_%d.pdf'%epoch,)
+
+    if epoch > 0: # no make sense to save since the begginer
+      self.plot_evolution(self.history, output+'/evolution_%d.pdf'%epoch)
+
+  def plot_evolution( self, history, output ):
+      fig = plt.figure(figsize=(10, 5))
+      epochs = list(range(len(history['discr_loss'])))
+      xmin = epochs[0] - 20
+      xmax = epochs[-1] + 20
+      plt.plot( epochs, history['discr_loss'], label='discr_loss', color='b')
+      plt.plot( epochs, history['gen_loss'], label='gen_loss', color='r')
+      plt.xlabel('Epochs',fontsize=18,loc='right')
+      plt.ylabel('Loss',fontsize=18,loc='top')
+      ax = plt.gca()
+      ax.set_xlim(xmin,xmax)
+      plt.legend()
+      if self.notebook:
+        plt.show()
+      fig.savefig(output)

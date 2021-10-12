@@ -7,3 +7,5 @@ def declare_property( cls, kw, name, value , private=False):
     setattr(cls,atribute, kw[name])
   else:
     setattr(cls,atribute, value)
+
+
