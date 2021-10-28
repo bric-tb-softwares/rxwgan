@@ -1,6 +1,9 @@
 
 __all__ = ['declare_property']
 
+#
+# declare property
+#
 def declare_property( cls, kw, name, value , private=False):
   atribute = ('__' + name ) if private else name
   if name in kw.keys():
