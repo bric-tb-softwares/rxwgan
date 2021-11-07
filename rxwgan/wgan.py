@@ -31,6 +31,7 @@ class wgan_optimizer(object):
     declare_property(self, kw, 'save_for_each'       , 0                         )
     declare_property(self, kw, 'output_dir'          , 'output'                  )
     declare_property(self, kw, 'notebook'            , True                      )
+    declare_property(self, kw, 'val_metrics'         , []                        )
 
     # Initialize discriminator and generator networks
     self.discriminator = model.discriminator
@@ -49,66 +50,82 @@ class wgan_optimizer(object):
   #
   # Train models
   #
-  def train(self, train_generator ):
+  def fit(self, train_generator, val_generator = None ):
 
 
     output = os.getcwd()+'/'+self.output_dir
     if not os.path.exists(output): os.makedirs(output)
 
 
-    self.history = {
-                'discr_loss' : [],
-                'gen_loss'   : [],
-                'reg'        : [],
-                'real_output': [],
-                'fake_output': []
-    }
-
-
+    self.history = {}
 
     for epoch in range(self.max_epochs):
 
       batches = 0
-      vec_discr_loss = []
-      vec_gen_loss = []
-      vec_reg_loss = []
-      vec_real_output = []
-      vec_fake_output = []
 
-      for data_batch, _ in tqdm( train_generator , desc= 'training: ', ncols=60): 
+      local_vars = ['train_discr_loss', 'train_gen_loss', 'train_reg_loss']
+      if val_generator:
+        local_vars.extend( ['val_discr_loss', 'val_gen_loss'])
+
+
+      _history = { key:[] for key in local_vars}
+    
+
+      #
+      # Loop over epochs
+      #
+      for train_data_batch, _ in tqdm( train_generator , desc= 'training: ', ncols=60): 
+
+        val_data_bath , _ = val_generator.next()
 
         if self.n_discr and not ( (batches % self.n_discr)==0 ):
-          # Update only discriminator
-          discr_loss, reg_loss, gen_loss, real_output, fake_output = self.train_discr(data_batch) + (np.nan,)
+          # Update only discriminator using train dataset
+          train_discr_loss, train_reg_loss, train_gen_loss, train_real_output, 
+                            train_fake_output = self.train_discr(train_data_batch) + (np.nan,)
+        
+        
         else:
           # Update discriminator and generator
-          discr_loss, gen_loss, reg_loss, real_output, fake_output = self.train_discr_and_gen(data_batch)
+          train_discr_loss, train_gen_loss, train_reg_loss, train_real_output, train_fake_output = 
+                                                self.train_discr_and_gen(train_data_batch)
         
+
+        if val_generator:
+          # calculate val dataset
+          val_real_samples = val_data_bath
+          val_fake_samples = self.generate( val_real_samples.shape[0] )
+          val_real_output, val_fake_output = self.calculate_discr_output( val_real_samples, val_fake_samples )
+
+          # calculate val losses
+          val_discr_loss, _ = self.calculate_discr_loss( val_real_samples, val_fake_samples, val_real_output, val_fake_output)
+          val_gen_loss = self.calculate_gen_loss( val_fake_samples, val_fake_output ) 
+          # register other metrics into the history
+          for val_metric = self.val_metrics:
+            _history[key].append ( val_metric(val_real_samples, val_fake_samples, val_real_output, val_fake_output) )
+
+
         batches += 1
 
-        # accumulate
-        vec_discr_loss.append(discr_loss)
-        vec_gen_loss.append(gen_loss)
-        vec_reg_loss.append(reg_loss)
-        vec_real_output.extend(real_output.numpy().flatten())
-        vec_fake_output.extend(fake_output.numpy().flatten())
-        
-        # save last values
+        # register all local variables into the history
+        for key in local_vars:
+          _history[key].append(eval(key))
+
+        # stop after n batches
         if batches > len(train_generator):
           break
         
         
         # end of batch
 
-      # Update the history
-      self.history['discr_loss'].append( np.mean(vec_discr_loss) ) # wasserstein loss
-      self.history['gen_loss'].append( np.mean(vec_gen_loss) )
-      self.history['reg'].append( np.mean(vec_reg_loss) )
+      # get mean for all
+      for key in _history.keys():
+        self.history[key] = np.mean( _history[key] )
+
       
       perc = np.around(100*epoch/self.max_epochs, decimals=1)
-      print('Epoch: %i. Training %1.1f%% complete. discr_loss: %.3f. Gen_loss: %.3f. Regularizer: %.3f'
-               % (epoch, perc, self.history['discr_loss'][-1], self.history['gen_loss'][-1], 
-                  self.history['reg'][-1] ))
+      print('Epoch: %i. Training %1.1f%% complete. train_discr_loss: %.3f. val_discr_loss: %.3f. train_gen_loss: %.3f. val_gen_loss: %.3f'
+               % (epoch, perc, self.history['train_discr_loss'][-1], self.history['val_discr_loss'], 
+                               self.history['train_gen_loss'][-1]  , self.history['val_gen_loss'],  ))
 
 
       if self.disp_for_each and ( (epoch % self.disp_for_each)==0 ):
@@ -228,7 +245,6 @@ class wgan_optimizer(object):
     return discr_loss, gen_loss, discr_regularizer, real_output, fake_output
 
 
-
   @tf.function
   def generate(self, nsamples):
     z = tf.random.normal( (nsamples, self.latent_dim) )
@@ -253,6 +269,7 @@ class wgan_optimizer(object):
       self.plot_evolution(self.history, output+'/evolution_%d.pdf'%epoch)
       self.plot_histogram(vec_real_output, vec_fake_output, output+'/histogram_%d.pdf'%epoch)
 
+
   def plot_evolution( self, history, output ):
       fig = plt.figure(figsize=(10, 5))
       epochs = list(range(len(history['discr_loss'])))
@@ -269,9 +286,8 @@ class wgan_optimizer(object):
         plt.show()
       fig.savefig(output)
   
-  def plot_histogram(self, vec_real_output, vec_fake_output, output):
+  def plot_histogram(self, vec_real_output, vec_fake_output, output, bins = 50):
     fig = plt.figure(figsize=(10, 5))
-    bins = 50
     plt.hist(vec_real_output , bins = bins, label='real_output', color='b')
     plt.hist(vec_fake_output , bins = bins, label='fake_output', color='r')
     plt.xlabel('Mean Output',fontsize=18,loc='right')
