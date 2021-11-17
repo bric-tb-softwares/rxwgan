@@ -12,3 +12,4 @@ def declare_property( cls, kw, name, value , private=False):
     setattr(cls,atribute, value)
 
 
+
