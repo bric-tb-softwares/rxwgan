@@ -57,9 +57,9 @@ class wgangp_optimizer(object):
     output = os.getcwd()+'/'+self.output_dir
     if not os.path.exists(output): os.makedirs(output)
 
-    local_vars = ['train_critic_loss', 'train_gen_loss', 'train_reg_loss', 'train_div_kl' , 'train_div_js']
+    local_vars = ['train_critic_loss', 'train_gen_loss', 'train_reg_loss']
     if val_generator:
-      local_vars.extend( ['val_critic_loss', 'val_gen_loss', 'val_div_kl', 'val_div_js'])
+      local_vars.extend( ['val_critic_loss', 'val_gen_loss'])
 
 
     if not self.history:
@@ -84,7 +84,6 @@ class wgangp_optimizer(object):
           # Update critic and generator
           train_critic_loss, train_gen_loss, train_reg_loss, train_real_output, train_fake_samples, train_fake_output = self.train_critic_and_gen(train_real_samples)
         
-        train_div_kl, train_div_js = self.calculate_divergences(train_real_samples, train_fake_samples.numpy())
 
         if val_generator:
           
@@ -98,7 +97,6 @@ class wgangp_optimizer(object):
           val_critic_loss, _ = self.calculate_critic_loss( val_real_samples, val_fake_samples, val_real_output, val_fake_output)
           val_gen_loss = self.calculate_gen_loss( val_fake_samples, val_fake_output ) 
 
-          val_div_kl, val_div_js = self.calculate_divergences(val_real_samples, val_fake_samples.numpy())
 
 
         batches += 1
@@ -120,10 +118,10 @@ class wgangp_optimizer(object):
 
       
       perc = np.around(100*epoch/self.max_epochs, decimals=1)
-      print('Epoch: %i. Training %1.1f%% complete. critic_loss: %.3f. val_critic_loss: %.3f. gen_loss: %.3f. val_gen_loss: %.3f. kl: %.3f, val_kl: %.3f'
+      print('Epoch: %i. Training %1.1f%% complete. critic_loss: %.3f. val_critic_loss: %.3f. gen_loss: %.3f. val_gen_loss: %.3f.'
                % (epoch, perc, self.history['train_critic_loss'][-1], self.history['val_critic_loss'][-1], 
                                self.history['train_gen_loss'][-1]  , self.history['val_gen_loss'][-1],
-                               self.history['train_div_kl'][-1], self.history['val_div_kl'][-1]  ))
+                                ))
 
 
       if self.disp_for_each and ( (epoch % self.disp_for_each)==0 ):
@@ -250,18 +248,6 @@ class wgangp_optimizer(object):
     z = tf.random.normal( (nsamples, self.latent_dim) )
     return self.generator( z )
 
-  
-  def calculate_divergences(self, real_samples, fake_samples):
-    
-    real_counts, bins = np.histogram( real_samples.flatten(), bins=100, range=(0,1) )
-    real_pdf = est_pdf(real_counts, beta=1)
-
-    fake_counts, bins = np.histogram( fake_samples.flatten(), bins=100, range=(0,1) )
-    fake_pdf = est_pdf(fake_counts, beta=1)
-
-    kl_div = calc_kl(pk = real_pdf, qk = fake_pdf)
-    js_div = calc_js(pk = real_pdf, qk = fake_pdf)
-    return kl_div, js_div
 
 
   def display_images(self, epoch, output):
