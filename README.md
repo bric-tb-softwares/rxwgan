@@ -18,7 +18,7 @@ This will create the critic and generator (h5) models into your workspace.
 run_wgangp.py -i path_to_table.csv -o output_file -g generator.h5 -c critic.h5 --batch_size 16 --fold 0 --n_splits 5 --save_for_each 50 --disp_for_each 50 --epochs 1000
 ```
 
-If for some reason you lost the machine, you can restart from the last saved configuration. For example, the last saved models came from epoch 100. To restart from epoch 100 + 1, tip this:
+If for some reason you lost the machine, you can restart from the last saved configuration. For example, the last saved models came from epoch 100. To restart from epoch 100 + (1):
 
 ```
 run_wgangp.py -i path_to_table.csv -o output_file -g generator_epoch_100.h5 -c critic_epoch_100.h5 --history history_epoch_100.json ----batch_size 16 --fold 0 --n_splits 5 --save_for_each 50 --disp_for_each 50 --start_from_epoch 101 --epochs 1000
