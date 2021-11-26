@@ -5,8 +5,10 @@ import numpy as np
 import argparse
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from rxwgan.wgangp import wgangp_optimizer
-from rxwgan.kfold import newKfold
+#from rxwgan.kfold import KFold
 from sklearn.model_selection import KFold
+
+
 import tensorflow as tf  
 import json
 
@@ -99,7 +101,6 @@ generator.summary()
 critic = tf.keras.models.load_model(args.critic)
 critic.summary()
 
-print(critic.layers[0].input_shape)
 height = critic.layers[0].input_shape[0][1]
 width  = critic.layers[0].input_shape[0][2]
 
@@ -108,22 +109,12 @@ output_dir = 'output/fold_%d'%args.fold
 dataframe = pd.read_csv(args.input)
 
 
-# kfold, since we will train separated classes here, we dont need stratified k fold.
-kfoldInstance = newKfold(dataframe, args.n_splits, args.seed)
-new_kfold = kfoldInstance.create_new_kfold()
+kf = KFold(n_splits = args.n_splits, shuffle = True, random_state = args.seed)
+#splits = [(train_index, val_index, test_index) for train_index, val_index, test_index in kf.split(dataframe)]
+splits = [(train_index, val_index) for train_index, val_index in kf.split(dataframe)]
 
-training_data = dataframe.iloc[new_kfold[args.fold][0]]
-validation_data = dataframe.iloc[new_kfold[args.fold][1]]
-testing_data = dataframe.iloc[new_kfold[args.fold][2]]
-
-#kf = KFold(n_splits = args.n_splits, shuffle = True, random_state = args.seed)
-
-#splits = [(train_index, val_index) for train_index, val_index in kf.split(dataframe)]
-
-#training_data   = dataframe.iloc[splits[args.fold][0]]
-#validation_data = dataframe.iloc[splits[args.fold][1]]
-
-
+training_data   = dataframe.iloc[splits[args.fold][0]]
+validation_data = dataframe.iloc[splits[args.fold][1]]
 
 # image generator
 datagen = ImageDataGenerator( rescale=1./255 )

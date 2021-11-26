@@ -3,11 +3,12 @@ __all__ = ['wgangp_optimizer']
 
 import logging
 import numpy as np
+import itertools
 import tensorflow as tf
 from tqdm import tqdm
 from rxwgan.utils import declare_property
 from rxwgan.plots import plot_evolution
-from rxwgan.stats import calc_kl , calc_js, est_pdf
+from rxwgan.stats import calc_kl , calc_js, est_pdf, integrate
 import matplotlib.pyplot as plt
 import os
 import json
@@ -15,8 +16,7 @@ import json
 import atlas_mpl_style as ampl
 ampl.use_atlas_style()
 
-
-
+eps = 1e-3
 
 class wgangp_optimizer(object):
 
@@ -42,11 +42,8 @@ class wgangp_optimizer(object):
     self.latent_dim    = generator.layers[0].input_shape[0][1]
     self.height        = critic.layers[0].input_shape[0][1]
     self.width         = critic.layers[0].input_shape[0][2]
-  
-    
 
 
- 
 
   #
   # Train models
@@ -57,24 +54,45 @@ class wgangp_optimizer(object):
     output = os.getcwd()+'/'+self.output_dir
     if not os.path.exists(output): os.makedirs(output)
 
-    local_vars = ['train_critic_loss', 'train_gen_loss', 'train_reg_loss']
-    if val_generator:
-      local_vars.extend( ['val_critic_loss', 'val_gen_loss'])
+    train_local_vars = ['train_critic_loss', 
+                        'train_gen_loss', 
+                        'train_reg_loss', 
+                        'train_kl_rr',
+                        'train_kl_rf', 
+                        'train_js_rr',
+                        'train_js_rf', 
+                        'train_l1_rr', 
+                        'train_l1_rf',
+                        'train_l2_rr', 
+                        'train_l2_rf']
 
-
+    val_local_vars = ['val_critic_loss', 
+                      'val_gen_loss', 
+                      'val_kl_rr',
+                      'val_kl_rf', 
+                      'val_js_rr',
+                      'val_js_rf', 
+                      'val_l1_rr', 
+                      'val_l1_rf', 
+                      'val_l2_rr', 
+                      'val_l2_rf']
+    
     if not self.history:
       # initialize the history for the first time
-      self.history = { key:[] for key in local_vars}
-    # if not, probably the optimizer will start from epoch x because a shut down
+      self.history = { key:[] for key in train_local_vars}
+      if val_generator:
+        self.history.update({ key:[] for key in val_local_vars})
 
+
+    # if not, probably the optimizer will start from epoch x because a shut down
     for epoch in range(self.start_from_epoch, self.max_epochs):
 
-      batches = 0
-      _history = { key:[] for key in local_vars}
+      _history = { key:[] for key in self.history.keys()}
     
       #
       # Loop over epochs
       #
+      batches = 0
       for train_real_samples , _ in tqdm( train_generator , desc= 'training: ', ncols=60): 
 
         if self.n_critic and not ( (batches % self.n_critic)==0 ):
@@ -84,44 +102,96 @@ class wgangp_optimizer(object):
           # Update critic and generator
           train_critic_loss, train_gen_loss, train_reg_loss, train_real_output, train_fake_samples, train_fake_output = self.train_critic_and_gen(train_real_samples)
         
+        
+        skip_local_vars = []
 
-        if val_generator:
-          
-          val_real_samples , _ = val_generator.next()
+        # train must have at least two events
+        if train_real_samples.shape[0] > 1:
 
-          # calculate val dataset
-          val_fake_samples = self.generate( val_real_samples.shape[0] )
-          val_real_output, val_fake_output = self.calculate_critic_output( val_real_samples, val_fake_samples )
+          # calculate divergences
+          train_kl_rr, train_js_rr = self.calculate_divergences( train_real_samples, train_real_samples )
+          train_kl_rf, train_js_rf = self.calculate_divergences( train_real_samples, train_fake_samples.numpy() )
 
-          # calculate val losses
-          val_critic_loss, _ = self.calculate_critic_loss( val_real_samples, val_fake_samples, val_real_output, val_fake_output)
-          val_gen_loss = self.calculate_gen_loss( val_fake_samples, val_fake_output ) 
-
-
+          # calculate l1 and l2 norm errors
+          train_l1_rr, train_l2_rr = self.calculate_l1_and_l2_norm_erros(train_real_samples, train_real_samples )
+          train_l1_rf, train_l2_rf = self.calculate_l1_and_l2_norm_erros(train_real_samples, train_fake_samples.numpy() )
+        else:
+          skip_local_vars = ['train_kl_rr','train_kl_rf', 'train_js_rr','train_js_rf', 
+                             'train_l1_rr', 'train_l1_rf','train_l2_rr', 'train_l2_rf']
 
         batches += 1
 
         # register all local variables into the history
-        for key in local_vars:
-          _history[key].append(eval(key))
+        for key in train_local_vars:
+          if not key in skip_local_vars:
+            _history[key].append(eval(key))
 
         # stop after n batches
         if batches > len(train_generator):
           break
-        
-        
-        # end of batch
+
+        # end of train batch
+
+
+      if val_generator:
+        batches = 0
+        for val_real_samples , _ in tqdm( val_generator , desc= 'validation: ', ncols=60): 
+
+          # calculate val dataset
+          val_fake_samples = self.generate( val_real_samples.shape[0] ).numpy()
+          val_real_output, val_fake_output = self.calculate_critic_output( val_real_samples, val_fake_samples )
+          # calculate val losses
+          val_critic_loss, _ = self.calculate_critic_loss( val_real_samples, val_fake_samples, val_real_output, val_fake_output)
+          val_gen_loss = self.calculate_gen_loss( val_fake_samples, val_fake_output ) 
+
+          skip_local_vars = []
+
+          # validation must have at least two events
+          if val_real_samples.shape[0] > 1:
+
+            # calculate divergences
+            val_kl_rr, val_js_rr = self.calculate_divergences( val_real_samples, val_real_samples )
+            val_kl_rf, val_js_rf = self.calculate_divergences( val_real_samples, val_fake_samples )
+
+            # calculate l1 and l2 norm errors
+            val_l1_rr, val_l2_rr = self.calculate_l1_and_l2_norm_erros(val_real_samples, val_real_samples)
+            val_l1_rf, val_l2_rf = self.calculate_l1_and_l2_norm_erros(val_real_samples, val_fake_samples)
+          
+          else:
+            skip_local_vars = ['train_kl_rr','train_kl_rf', 'train_js_rr','train_js_rf', 
+                               'train_l1_rr', 'train_l1_rf','train_l2_rr', 'train_l2_rf']
+
+          
+          # register all local variables into the history
+          for key in val_local_vars:
+            if not key in skip_local_vars:
+              _history[key].append(eval(key))
+  
+          batches += 1
+
+          # stop after n batches
+          if batches > len(val_generator):
+            break
+
+      
+        # end of val batch
+
 
       # get mean for all
       for key in _history.keys():
         self.history[key].append(float(np.mean( _history[key] ))) # to float to be serializable
 
-      
       perc = np.around(100*epoch/self.max_epochs, decimals=1)
-      print('Epoch: %i. Training %1.1f%% complete. critic_loss: %.3f. val_critic_loss: %.3f. gen_loss: %.3f. val_gen_loss: %.3f.'
+
+      if val_generator:
+        print('Epoch: %i. Training %1.1f%% complete. critic_loss: %.3f. val_critic_loss: %.3f. gen_loss: %.3f. val_gen_loss: %.3f. val_kl_rf: %.3f. val_js_rf: %.3f.'
                % (epoch, perc, self.history['train_critic_loss'][-1], self.history['val_critic_loss'][-1], 
                                self.history['train_gen_loss'][-1]  , self.history['val_gen_loss'][-1],
+                               self.history['val_kl_rf'][-1], self.history['val_js_rf'][-1]
                                 ))
+      else:
+        print('Epoch: %i. Training %1.1f%% complete. critic_loss: %.3f. gen_loss: %.3f.'
+               % (epoch, perc, self.history['train_critic_loss'][-1], self.history['train_gen_loss'][-1]))
 
 
       if self.disp_for_each and ( (epoch % self.disp_for_each)==0 ):
@@ -133,8 +203,6 @@ class wgangp_optimizer(object):
         self.generator.save(output+'/generator_epoch_%d.h5'%epoch)
         with open(output+'/history_epoch_%d.json'%epoch, 'w') as handle:
           json.dump(self.history, handle,indent=4)
-
-
 
     return self.history
 
@@ -276,4 +344,39 @@ class wgangp_optimizer(object):
     if self.notebook:
       plt.show()
     fig.savefig(output + '/critic_outputs_epoch_%d.pdf'%epoch)
+
+
+  def calculate_divergences( self , real_samples, fake_samples ):
+
+    kl = []; js = []; l1 = []
+    for r_idx, f_idx in itertools.permutations(list(range(real_samples.shape[0])), 2):
+      
+      # Int_inf_to_plus_int p(x)/(dx*total) * dx = 1
+      real_pdf, bins = np.histogram( real_samples[r_idx].flatten(), bins=100, range=(0,1), density=True )
+      fake_pdf, bins = np.histogram( fake_samples[f_idx].flatten(), bins=100, range=(0,1), density=True )
+
+      kl.append( integrate( calc_kl(pk = real_pdf + eps, qk = fake_pdf + eps), dx=1/100 ) )
+      js.append( integrate( calc_js(pk = real_pdf + eps, qk = fake_pdf + eps), dx=1/100 ) )
+
+    return np.mean(kl), np.mean(js)
+
+
+  def calculate_l1_and_l2_norm_erros(self, real_samples, fake_samples):
+
+    l1 = []; l2 = []
+    for r_idx, f_idx in itertools.permutations(list(range(real_samples.shape[0])), 2):
+
+      # height x width
+      hw = len(real_samples[r_idx]) * len(real_samples[r_idx][0])
+
+      # calculate l1
+      l1.append( sum(sum( abs( real_samples[r_idx] - fake_samples[f_idx] ) ) )[0] / hw )
+    
+      # calculate l2
+      # l2_norm_error = 1/HW * Sum ( (y-yhat)**2 ) 
+      l2.append( sum(sum( np.power(real_samples[r_idx] - fake_samples[f_idx],2) ) )[0] / hw )
+
+    return np.mean(l1),  np.mean(l2)
+
+
 

@@ -20,3 +20,7 @@ from .stats import *
 from . import metrics
 __all__.extend( metrics.__all__ )
 from .metrics import *
+
+from . import kfold
+__all__.extend( kfold.__all__ )
+from .kfold import *

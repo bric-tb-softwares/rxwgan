@@ -1,6 +1,6 @@
 
 
-__all__ = ["calc_kl", "calc_js","est_pdf"]
+__all__ = ["calc_kl", "calc_js","est_pdf", "integrate"]
 
 import numpy as np
 
@@ -13,6 +13,11 @@ def calc_kl(pk, qk):
     qk: pdf values from q distribution.
     '''
     return np.nan_to_num(pk*np.log(pk/qk))
+
+
+def integrate( bins, dx = 1):
+    return np.trapz( bins, dx=dx)
+
 
 def calc_js(pk, qk):
     '''
