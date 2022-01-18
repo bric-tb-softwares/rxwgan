@@ -6,9 +6,9 @@ import numpy as np
 import itertools
 import tensorflow as tf
 from tqdm import tqdm
-from rxwgan.utils import declare_property
+from rxwgan import declare_property
 from rxwgan.plots import plot_evolution
-from rxwgan.stats import calc_kl , calc_js, est_pdf, integrate
+from rxwgan.stats import calculate_divergences, calculate_l1_and_l2_norm_errors, eps
 import matplotlib.pyplot as plt
 import os
 import json
@@ -16,7 +16,7 @@ import json
 import atlas_mpl_style as ampl
 ampl.use_atlas_style()
 
-eps = 1e-3
+
 
 class wgangp_optimizer(object):
 
@@ -347,35 +347,12 @@ class wgangp_optimizer(object):
 
 
   def calculate_divergences( self , real_samples, fake_samples ):
-
-    kl = []; js = []; l1 = []
-    for r_idx, f_idx in itertools.permutations(list(range(real_samples.shape[0])), 2):
-      
-      # Int_inf_to_plus_int p(x)/(dx*total) * dx = 1
-      real_pdf, bins = np.histogram( real_samples[r_idx].flatten(), bins=100, range=(0,1), density=True )
-      fake_pdf, bins = np.histogram( fake_samples[f_idx].flatten(), bins=100, range=(0,1), density=True )
-
-      kl.append( integrate( calc_kl(pk = real_pdf + eps, qk = fake_pdf + eps), dx=1/100 ) )
-      js.append( integrate( calc_js(pk = real_pdf + eps, qk = fake_pdf + eps), dx=1/100 ) )
-
+    kl, js = calculate_divergences(real_samples, fake_samples)
     return np.mean(kl), np.mean(js)
 
 
-  def calculate_l1_and_l2_norm_erros(self, real_samples, fake_samples):
-
-    l1 = []; l2 = []
-    for r_idx, f_idx in itertools.permutations(list(range(real_samples.shape[0])), 2):
-
-      # height x width
-      hw = len(real_samples[r_idx]) * len(real_samples[r_idx][0])
-
-      # calculate l1
-      l1.append( sum(sum( abs( real_samples[r_idx] - fake_samples[f_idx] ) ) )[0] / hw )
-    
-      # calculate l2
-      # l2_norm_error = 1/HW * Sum ( (y-yhat)**2 ) 
-      l2.append( sum(sum( np.power(real_samples[r_idx] - fake_samples[f_idx],2) ) )[0] / hw )
-
+  def calculate_l1_and_l2_norm_errors(self, real_samples, fake_samples):
+    l1, l2 = calculate_l1_and_l2_norm_errors( real_samples, fake_samples )
     return np.mean(l1),  np.mean(l2)
 
 
