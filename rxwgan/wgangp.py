@@ -211,6 +211,7 @@ class wgangp_optimizer(object):
                'history'   : output+'/history_epoch_%d.json'%epoch,
                'critic'    : output+'/critic_epoch_%d.h5'%epoch,
                'generator' : output+'/generator_epoch_%d.h5'%epoch,
+          }
           json.dump(d, handle,indent=4)
 
     return self.history
