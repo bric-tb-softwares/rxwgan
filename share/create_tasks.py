@@ -7,7 +7,7 @@ path = basepath + '/wgangp/v1'
 exec_cmd = "git clone https://github.com/bric-tb-softwares/rxwgan.git && "
 # exec this
 exec_cmd+= "cd rxwgan && export PYTHONPATH=$PYTHONPATH:$PWD/rxwgan/rxwgan && cd .. && "
-exec_cmd+= "python rxwgan/share/run_wgangp.py -j %IN -i %DATA -t 1 --test {TEST} -o %OUT"
+exec_cmd+= "python rxwgan/share/run_wgangp.py -j %IN -i %DATA -t 1 --test {TEST} -v %OUT"
 
 command = """maestro.py task create \
   -v {PATH} \

@@ -105,10 +105,6 @@ try:
     validation_data = validation_data.loc[validation_data.target==args.target]
 
 
-    print(dataframe.shape)
-    print(training_data.shape)
-    print(validation_data.shape)
-
     # image generator
     datagen = ImageDataGenerator( rescale=1./255 )
 
