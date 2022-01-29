@@ -4,10 +4,11 @@ basepath = os.getcwd()
 path = basepath + '/wgangp'
 
 # from...
-exec_cmd = "git clone https://github.com/bric-tb-softwares/rxwgan.git && "
+exec_cmd = "(rm -rf rxwgan || true) && (rm -rf .complete || true) && " # some protections
+exec_cmd+= "git clone https://github.com/bric-tb-softwares/rxwgan.git && "
 # exec this
 exec_cmd+= "cd rxwgan && export PYTHONPATH=$PYTHONPATH:$PWD/rxwgan/rxwgan && cd .. && "
-exec_cmd+= "python rxwgan/share/run_wgangp.py -j %IN -i %DATA -t 0 --test {TEST} -v %OUT "
+exec_cmd+= "python rxwgan/share/job_tuning.py -j %IN -i %DATA -t 0 --test {TEST} -v %OUT "
 exec_cmd+= "&& rm -rf rxwgan"
 
 command = """maestro.py task create \
@@ -18,7 +19,6 @@ command = """maestro.py task create \
   --exec "{EXEC}" \
   --queue "gpu" \
   --bypass \
-  --bypass_local_test \
   """
 
 try:

@@ -8,8 +8,6 @@ from rxwgan.wgangp import wgangp_optimizer
 from rxwgan.models.models_v1 import *
 from rxwgan.stratified_kfold import stratified_train_val_test_splits
 from sklearn.model_selection import KFold
-
-
 import tensorflow as tf  
 import json
 
@@ -75,6 +73,14 @@ if len(sys.argv)==1:
 
 args = parser.parse_args()
 
+def lock_as_completed_job(output):
+  with open(output+'/.complete','w') as f:
+    f.write('complete')
+
+def lock_as_failed_job(output):
+  with open(output+'/.failed','w') as f:
+    f.write('failed')
+
 try:
     job  = json.load(open(args.job, 'r'))
     sort = job['sort']
@@ -84,11 +90,13 @@ try:
     # Check if we need to recover something...
     #
     if os.path.exists(args.volume+'/recover.json'):
+        print('Enable recover mode.')
         recover = json.load(open(args.volume+'/recover.json', 'r'))
         history = json.load(open(recover['history'], 'r'))
         critic = tf.keras.models.load_model(recover['critic'])
         generator = tf.keras.models.load_model(recover['generator'])
         start_from_epoch = recover['epoch'] + 1
+        print('starts from %d epoch...'%start_from_epoch)
     else:
         start_from_epoch= 0
         # create models
@@ -164,13 +172,11 @@ try:
       json.dump(history, handle,indent=4)
 
     # necessary to work on orchestra
-    from saphyra import lock_as_completed_job
     lock_as_completed_job(args.volume if args.volume else '.')
     sys.exit(0)
 
 except  Exception as e:
     print(e)
     # necessary to work on orchestra
-    from saphyra import lock_as_failed_job
     lock_as_failed_job(args.volume if args.volume else '.')
     sys.exit(1)
