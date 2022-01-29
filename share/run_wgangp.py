@@ -16,9 +16,9 @@ import json
 parser = argparse.ArgumentParser(description = '', add_help = False)
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-o','--output', action='store', 
-    dest='output', required = False,
-    help = "Output dir")
+parser.add_argument('-v','--volume', action='store', 
+    dest='volume', required = False,
+    help = "volume path")
 
 parser.add_argument('-i','--input', action='store', 
     dest='input', required = True, default = None, 
@@ -91,7 +91,7 @@ try:
     height = critic.layers[0].input_shape[0][1]
     width  = critic.layers[0].input_shape[0][2]
 
-    output_dir = 'output/sort_%d'%(sort)
+    output_dir = args.volume
 
     dataframe = pd.read_csv(args.input)
 
