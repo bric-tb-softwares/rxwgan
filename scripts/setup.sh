@@ -1,8 +1,7 @@
 
 
-echo "setup rxgan by hand..."
+echo "setup rxwgan by hand..."
 export PYTHONPATH=`pwd`:$PYTHONPATH
-export PATH=`pwd`/scripts:$PATH
 
 
 

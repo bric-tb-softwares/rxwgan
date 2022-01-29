@@ -76,17 +76,25 @@ if len(sys.argv)==1:
 args = parser.parse_args()
 
 try:
-    job = json.load(open(args.job, 'r'))
+    job  = json.load(open(args.job, 'r'))
+    sort = job['sort']
 
-    sort       = job['sort']
 
-
-    # create models
-    critic = Critic_v1().model
-    generator = Generator_v1().model
-
-    critic.summary()
-    generator.summary()
+    #
+    # Check if we need to recover something...
+    #
+    if os.path.exists(args.volume+'/recover.json'):
+        recover = json.load(open(args.volume+'/recover.json', 'r'))
+        history = json.load(open(recover['history'], 'r'))
+        critic = tf.keras.models.load_model(recover['critic'])
+        generator = tf.keras.models.load_model(recover['generator'])
+        start_from_epoch = recover['epoch'] + 1
+    else:
+        start_from_epoch= 0
+        # create models
+        critic = Critic_v1().model
+        generator = Generator_v1().model
+        history = None
 
     height = critic.layers[0].input_shape[0][1]
     width  = critic.layers[0].input_shape[0][2]
@@ -127,17 +135,23 @@ try:
                                                   shuffle = False,
                                                   color_mode = 'grayscale')
 
+
+
+
     #
     # Create optimizer
     #
 
+    is_test = os.getenv('LOCAL_TEST')
 
     optimizer = wgangp_optimizer( critic, generator, 
-                                  n_discr = args.n_discr, 
-                                  max_epochs = 1 if os.getenv('LOCAL_TEST') else args.epochs, 
+                                  n_discr = args.n_discr,
+                                  history = history,
+                                  start_from_epoch = 0 if is_test else start_from_epoch,
+                                  max_epochs = 1 if is_test else args.epochs, 
                                   output_dir = output_dir,
                                   disp_for_each = args.disp_for_each, 
-                                  save_for_each=args.save_for_each )
+                                  save_for_each =args.save_for_each )
 
 
     # Run!

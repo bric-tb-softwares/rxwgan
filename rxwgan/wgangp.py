@@ -31,7 +31,7 @@ class wgangp_optimizer(object):
     declare_property(self, kw, 'critic_optimizer'    , tf.optimizers.Adam(lr=1e-4, beta_1=0.5, decay=1e-4 )     )
     declare_property(self, kw, 'disp_for_each'       , 0                         )
     declare_property(self, kw, 'save_for_each'       , 0                         )
-    declare_property(self, kw, 'output_dir'          , 'output'                  )
+    declare_property(self, kw, 'output_dir'          , None                      )
     declare_property(self, kw, 'notebook'            , True                      )
     declare_property(self, kw, 'history'             , None                      ) # in case of panic
     declare_property(self, kw, 'start_from_epoch'    , 0                         ) # in case of panic
@@ -50,9 +50,11 @@ class wgangp_optimizer(object):
   #
   def fit(self, train_generator, val_generator = None ):
 
-
-    output = os.getcwd()+'/'+self.output_dir
-    if not os.path.exists(output): os.makedirs(output)
+    if not self.output_dir:
+      output = os.getcwd()+'/'+self.output_dir
+      if not os.path.exists(output): os.makedirs(output)
+    else:
+      output = os.getcwd()
 
     train_local_vars = ['train_critic_loss', 
                         'train_gen_loss', 
@@ -203,6 +205,13 @@ class wgangp_optimizer(object):
         self.generator.save(output+'/generator_epoch_%d.h5'%epoch)
         with open(output+'/history_epoch_%d.json'%epoch, 'w') as handle:
           json.dump(self.history, handle,indent=4)
+
+        with open(output+'/recover.json', 'w') as handle:
+          d = {'epoch'     :epoch, 
+               'history'   : output+'/history_epoch_%d.json'%epoch,
+               'critic'    : output+'/critic_epoch_%d.h5'%epoch,
+               'generator' : output+'/generator_epoch_%d.h5'%epoch,
+          json.dump(d, handle,indent=4)
 
     return self.history
 
