@@ -7,7 +7,7 @@ path = basepath + '/wgangp/v1'
 exec_cmd = "git clone https://github.com/bric-tb-softwares/rxwgan.git && "
 # exec this
 exec_cmd+= "cd rxwgan && source scripts/setup.sh && cd .. && "
-exec_cmd+= "python rxwgan/share/run_wgangp.py -j %IN -i %DATA -t 1 --test {TEST}"
+exec_cmd+= "python rxwgan/share/run_wgangp.py -j %IN -i %DATA -t 1 --test {TEST} -o %OUT"
 
 command = """maestro.py task create \
   -v {PATH} \
@@ -26,6 +26,7 @@ except:
 for test in range(10):
     cmd = command.format(PATH=path,EXEC=exec_cmd.format(TEST=test), TEST=test)
     print(cmd)
-    #os.system(cmd)
+    os.system(cmd)
+    break
 
 

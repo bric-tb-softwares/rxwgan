@@ -75,84 +75,94 @@ if len(sys.argv)==1:
 
 args = parser.parse_args()
 
+try:
+    job = json.load(open(args.job, 'r'))
 
-print(args.input)
-job = json.load(open(args.job, 'r'))
-
-sort       = job['sort']
-
-
-# create models
-critic = Critic_v1().model
-generator = Generator_v1().model
-
-critic.summary()
-generator.summary()
-
-height = critic.layers[0].input_shape[0][1]
-width  = critic.layers[0].input_shape[0][2]
-
-output_dir = 'output/sort_%d'%(sort)
-
-dataframe = pd.read_csv(args.input)
+    sort       = job['sort']
 
 
-splits = stratified_train_val_test_splits(dataframe)[args.test]
-training_data   = dataframe.iloc[splits[sort][0]]
-validation_data = dataframe.iloc[splits[sort][1]]
+    # create models
+    critic = Critic_v1().model
+    generator = Generator_v1().model
 
-target=args.target
-training_data = training_data.loc[training_data.target==args.target]
-validation_data = validation_data.loc[validation_data.target==args.target]
+    critic.summary()
+    generator.summary()
 
+    height = critic.layers[0].input_shape[0][1]
+    width  = critic.layers[0].input_shape[0][2]
 
-print(dataframe.shape)
-print(training_data.shape)
-print(validation_data.shape)
+    output_dir = 'output/sort_%d'%(sort)
 
-# image generator
-datagen = ImageDataGenerator( rescale=1./255 )
+    dataframe = pd.read_csv(args.input)
 
 
-train_generator = datagen.flow_from_dataframe(training_data, directory = None,
-                                              x_col = 'raw_image_path', 
-                                              y_col = 'target',
-                                              batch_size = args.batch_size,
-                                              target_size = (height,width), 
-                                              class_mode = 'raw', 
-                                              shuffle = False,
-                                              color_mode = 'grayscale')
+    splits = stratified_train_val_test_splits(dataframe)[args.test]
+    training_data   = dataframe.iloc[splits[sort][0]]
+    validation_data = dataframe.iloc[splits[sort][1]]
 
-val_generator   = datagen.flow_from_dataframe(validation_data, directory = None,
-                                              x_col = 'raw_image_path', 
-                                              y_col = 'target',
-                                              batch_size = args.batch_size,
-                                              class_mode = 'raw',
-                                              target_size = (height,width),
-                                              shuffle = False,
-                                              color_mode = 'grayscale')
-
-#
-# Create optimizer
-#
+    target=args.target
+    training_data = training_data.loc[training_data.target==args.target]
+    validation_data = validation_data.loc[validation_data.target==args.target]
 
 
-optimizer = wgangp_optimizer( critic, generator, 
-                              n_discr = args.n_discr, 
-                              max_epochs = args.epochs, 
-                              #start_from_epoch = args.start_from_epoch,
-                              #history = history,
-                              output_dir = output_dir,
-                              disp_for_each = args.disp_for_each, 
-                              save_for_each=args.save_for_each )
+    print(dataframe.shape)
+    print(training_data.shape)
+    print(validation_data.shape)
+
+    # image generator
+    datagen = ImageDataGenerator( rescale=1./255 )
 
 
-# Run!
-history = optimizer.fit( train_generator , val_generator )
+    train_generator = datagen.flow_from_dataframe(training_data, directory = None,
+                                                  x_col = 'raw_image_path', 
+                                                  y_col = 'target',
+                                                  batch_size = args.batch_size,
+                                                  target_size = (height,width), 
+                                                  class_mode = 'raw', 
+                                                  shuffle = False,
+                                                  color_mode = 'grayscale')
 
-# in the end, save all by hand
-critic.save(output_dir + '/critic_trained.h5')
-generator.save(output_dir + '/generator_trained.h5')
-with open(output_dir+'/history.json', 'w') as handle:
-  json.dump(history, handle,indent=4)
+    val_generator   = datagen.flow_from_dataframe(validation_data, directory = None,
+                                                  x_col = 'raw_image_path', 
+                                                  y_col = 'target',
+                                                  batch_size = args.batch_size,
+                                                  class_mode = 'raw',
+                                                  target_size = (height,width),
+                                                  shuffle = False,
+                                                  color_mode = 'grayscale')
 
+    #
+    # Create optimizer
+    #
+
+
+    optimizer = wgangp_optimizer( critic, generator, 
+                                  n_discr = args.n_discr, 
+                                  max_epochs = args.epochs, 
+                                  #start_from_epoch = args.start_from_epoch,
+                                  #history = history,
+                                  output_dir = output_dir,
+                                  disp_for_each = args.disp_for_each, 
+                                  save_for_each=args.save_for_each )
+
+
+    # Run!
+    history = optimizer.fit( train_generator , val_generator )
+
+    # in the end, save all by hand
+    critic.save(output_dir + '/critic_trained.h5')
+    generator.save(output_dir + '/generator_trained.h5')
+    with open(output_dir+'/history.json', 'w') as handle:
+      json.dump(history, handle,indent=4)
+
+    # necessary to work on orchestra
+    from saphyra import lock_as_completed_job
+    lock_as_completed_job(args.volume if args.volume else '.')
+    sys.exit(0)
+
+except  Exception as e:
+    print(e)
+    # necessary to work on orchestra
+    from saphyra import lock_as_failed_job
+    lock_as_failed_job(args.volume if args.volume else '.')
+    sys.exit(1)
