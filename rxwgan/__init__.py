@@ -27,3 +27,6 @@ from . import metrics
 __all__.extend( metrics.__all__ )
 from .metrics import *
 
+from . import stratified_kfold
+__all__.extend( stratified_kfold.__all__ )
+from .stratified_kfold import *

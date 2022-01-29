@@ -113,8 +113,8 @@ class wgangp_optimizer(object):
           train_kl_rf, train_js_rf = self.calculate_divergences( train_real_samples, train_fake_samples.numpy() )
 
           # calculate l1 and l2 norm errors
-          train_l1_rr, train_l2_rr = self.calculate_l1_and_l2_norm_erros(train_real_samples, train_real_samples )
-          train_l1_rf, train_l2_rf = self.calculate_l1_and_l2_norm_erros(train_real_samples, train_fake_samples.numpy() )
+          train_l1_rr, train_l2_rr = self.calculate_l1_and_l2_norm_errors(train_real_samples, train_real_samples )
+          train_l1_rf, train_l2_rf = self.calculate_l1_and_l2_norm_errors(train_real_samples, train_fake_samples.numpy() )
         else:
           skip_local_vars = ['train_kl_rr','train_kl_rf', 'train_js_rr','train_js_rf', 
                              'train_l1_rr', 'train_l1_rf','train_l2_rr', 'train_l2_rf']
@@ -154,8 +154,8 @@ class wgangp_optimizer(object):
             val_kl_rf, val_js_rf = self.calculate_divergences( val_real_samples, val_fake_samples )
 
             # calculate l1 and l2 norm errors
-            val_l1_rr, val_l2_rr = self.calculate_l1_and_l2_norm_erros(val_real_samples, val_real_samples)
-            val_l1_rf, val_l2_rf = self.calculate_l1_and_l2_norm_erros(val_real_samples, val_fake_samples)
+            val_l1_rr, val_l2_rr = self.calculate_l1_and_l2_norm_errors(val_real_samples, val_real_samples)
+            val_l1_rf, val_l2_rf = self.calculate_l1_and_l2_norm_errors(val_real_samples, val_fake_samples)
           
           else:
             skip_local_vars = ['train_kl_rr','train_kl_rf', 'train_js_rr','train_js_rf', 
