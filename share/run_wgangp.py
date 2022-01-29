@@ -48,7 +48,7 @@ parser.add_argument('--batch_size', action='store',
     help = "train batch_size")
 
 parser.add_argument('--epochs', action='store', 
-    dest='epochs', required = False, default = 500, type=int,
+    dest='epochs', required = False, default = 1000, type=int,
     help = "Number of epochs.")
 
 parser.add_argument('--n_discr', action='store', 
@@ -138,9 +138,7 @@ try:
 
     optimizer = wgangp_optimizer( critic, generator, 
                                   n_discr = args.n_discr, 
-                                  max_epochs = args.epochs, 
-                                  #start_from_epoch = args.start_from_epoch,
-                                  #history = history,
+                                  max_epochs = 1 if os.getenv('LOCAL_TEST') else args.epochs, 
                                   output_dir = output_dir,
                                   disp_for_each = args.disp_for_each, 
                                   save_for_each=args.save_for_each )
