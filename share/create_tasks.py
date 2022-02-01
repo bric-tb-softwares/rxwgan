@@ -8,17 +8,17 @@ exec_cmd = "(rm -rf rxwgan || true) && (rm -rf .complete || true) && " # some pr
 exec_cmd+= "git clone https://github.com/bric-tb-softwares/rxwgan.git && "
 # exec this
 exec_cmd+= "cd rxwgan && export PYTHONPATH=$PYTHONPATH:$PWD/rxwgan/rxwgan && cd .. && "
-exec_cmd+= "python rxwgan/share/job_tuning.py -j %IN -i %DATA -t 0 --test {TEST} -v %OUT "
+exec_cmd+= "python rxwgan/share/job_tuning.py -j %IN -i %DATA -t 1 --test {TEST} -v %OUT "
 exec_cmd+= "&& rm -rf rxwgan"
 
 command = """maestro.py task create \
   -v {PATH} \
-  -t user.jodafons.Shenzhen_wgangp.v1.notb.test_{TEST} \
-  -c user.jodafons.bric.10sorts \
+  -t user.jodafons.Shenzhen.tuberculosis.model_wgangp.test_{TEST} \
+  -c user.jodafons.brics.10sorts \
   -d user.jodafons.Shenzhen_table_from_raw.csv \
   --exec "{EXEC}" \
   --queue "gpu" \
-  --bypass \
+  --bypass_local_test \
   """
 
 try:
@@ -26,10 +26,9 @@ try:
 except:
     pass
 
-for test in range(10):
+for test in range(5):
     cmd = command.format(PATH=path,EXEC=exec_cmd.format(TEST=test), TEST=test)
     print(cmd)
     os.system(cmd)
-    break
 
 

@@ -48,10 +48,10 @@ class wgangp_optimizer(object):
   #
   # Train models
   #
-  def fit(self, train_generator, val_generator = None ):
+  def fit(self, train_generator, val_generator = None, extra_d=None ):
 
-    if not self.output_dir:
-      output = os.getcwd()+'/'+self.output_dir
+    if self.output_dir is not None:
+      output = self.output_dir
       if not os.path.exists(output): os.makedirs(output)
     else:
       output = os.getcwd()
@@ -212,6 +212,9 @@ class wgangp_optimizer(object):
                'critic'    : output+'/critic_epoch_%d.h5'%epoch,
                'generator' : output+'/generator_epoch_%d.h5'%epoch,
           }
+
+          if extra_d:
+            d.update(extra_d)
           json.dump(d, handle,indent=4)
 
     return self.history

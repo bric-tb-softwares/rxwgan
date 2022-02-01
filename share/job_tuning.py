@@ -28,18 +28,13 @@ parser.add_argument('-j','--job', action='store',
 
 parser.add_argument('--test', action='store', 
     dest='test', required = True, default = None, type=int,
-    help = "test configuration.")
+    help = "test intex.")
 
 
 
 #
 # Train parameters
 #
-
-parser.add_argument('-t', '--target', action='store', 
-    dest='target', required = True, default = 1, type=int,
-    help = "target: 0/1")
-
 
 parser.add_argument('--batch_size', action='store', 
     dest='batch_size', required = False, default = 32, type=int,
@@ -84,14 +79,16 @@ def lock_as_failed_job(output):
 try:
     job  = json.load(open(args.job, 'r'))
     sort = job['sort']
+    target = job['target']
 
+    output_dir = args.volume + '/test_%d_sort_%d'%(args.test,sort)
 
     #
     # Check if we need to recover something...
     #
-    if os.path.exists(args.volume+'/recover.json'):
+    if os.path.exists(output_dir+'/recover.json'):
         print('Enable recover mode.')
-        recover = json.load(open(args.volume+'/recover.json', 'r'))
+        recover = json.load(open(output_dir+'/recover.json', 'r'))
         history = json.load(open(recover['history'], 'r'))
         critic = tf.keras.models.load_model(recover['critic'])
         generator = tf.keras.models.load_model(recover['generator'])
@@ -107,19 +104,18 @@ try:
     height = critic.layers[0].input_shape[0][1]
     width  = critic.layers[0].input_shape[0][2]
 
-    output_dir = args.volume
 
     dataframe = pd.read_csv(args.input)
 
 
-    splits = stratified_train_val_test_splits(dataframe)[args.test]
+    splits = stratified_train_val_test_splits(dataframe,args.seed)[args.test]
     training_data   = dataframe.iloc[splits[sort][0]]
     validation_data = dataframe.iloc[splits[sort][1]]
 
-    target=args.target
-    training_data = training_data.loc[training_data.target==args.target]
-    validation_data = validation_data.loc[validation_data.target==args.target]
+    training_data = training_data.loc[training_data.target==target]
+    validation_data = validation_data.loc[validation_data.target==target]
 
+    extra_d = {'sort' : sort, 'test':args.test, 'target':target, 'seed':args.seed}
 
     # image generator
     datagen = ImageDataGenerator( rescale=1./255 )
@@ -159,11 +155,11 @@ try:
                                   max_epochs = 1 if is_test else args.epochs, 
                                   output_dir = output_dir,
                                   disp_for_each = args.disp_for_each, 
-                                  save_for_each =args.save_for_each )
+                                  save_for_each = args.save_for_each )
 
 
     # Run!
-    history = optimizer.fit( train_generator , val_generator )
+    history = optimizer.fit( train_generator , val_generator, extra_d=extra_d )
 
     # in the end, save all by hand
     critic.save(output_dir + '/critic_trained.h5')
