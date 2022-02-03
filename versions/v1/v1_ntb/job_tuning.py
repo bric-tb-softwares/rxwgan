@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+try:
+  from tensorflow.compat.v1 import ConfigProto
+  from tensorflow.compat.v1 import InteractiveSession
+  config = ConfigProto()
+  config.gpu_options.allow_growth = True
+  session = InteractiveSession(config=config)
+except Exception as e:
+  print(e)
+  print("Not possible to set gpu allow growth")
+
 
 import pandas as pd
 import numpy as np
@@ -26,9 +36,6 @@ parser.add_argument('-j','--job', action='store',
     dest='job', required = True, default = None, 
     help = "job configuration.")
 
-parser.add_argument('--test', action='store', 
-    dest='test', required = True, default = None, type=int,
-    help = "test intex.")
 
 
 
@@ -80,8 +87,9 @@ try:
     job  = json.load(open(args.job, 'r'))
     sort = job['sort']
     target = job['target']
+    test = job['test']
 
-    output_dir = args.volume + '/test_%d_sort_%d'%(args.test,sort)
+    output_dir = args.volume + '/test_%d_sort_%d'%(test,sort)
 
     #
     # Check if we need to recover something...
@@ -108,14 +116,14 @@ try:
     dataframe = pd.read_csv(args.input)
 
 
-    splits = stratified_train_val_test_splits(dataframe,args.seed)[args.test]
+    splits = stratified_train_val_test_splits(dataframe,args.seed)[test]
     training_data   = dataframe.iloc[splits[sort][0]]
     validation_data = dataframe.iloc[splits[sort][1]]
 
     training_data = training_data.loc[training_data.target==target]
     validation_data = validation_data.loc[validation_data.target==target]
 
-    extra_d = {'sort' : sort, 'test':args.test, 'target':target, 'seed':args.seed}
+    extra_d = {'sort' : sort, 'test':test, 'target':target, 'seed':args.seed}
 
     # image generator
     datagen = ImageDataGenerator( rescale=1./255 )
@@ -127,7 +135,7 @@ try:
                                                   batch_size = args.batch_size,
                                                   target_size = (height,width), 
                                                   class_mode = 'raw', 
-                                                  shuffle = False,
+                                                  shuffle = True,
                                                   color_mode = 'grayscale')
 
     val_generator   = datagen.flow_from_dataframe(validation_data, directory = None,
@@ -136,7 +144,7 @@ try:
                                                   batch_size = args.batch_size,
                                                   class_mode = 'raw',
                                                   target_size = (height,width),
-                                                  shuffle = False,
+                                                  shuffle = True,
                                                   color_mode = 'grayscale')
 
 
