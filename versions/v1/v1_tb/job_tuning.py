@@ -14,10 +14,10 @@ import pandas as pd
 import numpy as np
 import argparse
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from rxwgan.models import *
 from rxwgan.wgangp import wgangp_optimizer
-from rxwgan.models.models_v1 import *
-from rxwgan.stratified_kfold import stratified_train_val_test_splits
-from sklearn.model_selection import KFold
+
+from rxcore.stratified_kfold import stratified_train_val_test_splits
 import tensorflow as tf  
 import json
 
