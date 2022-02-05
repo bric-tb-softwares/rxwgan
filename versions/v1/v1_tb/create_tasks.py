@@ -8,7 +8,6 @@ path = basepath
 #
 
 # remove all by hand in case of job retry... NOTE: some jobs needs to recover s
-exec_cmd = "(rm -rf .complete || true) && " # some protections
 exec_cmd = "(rm -rf rxcore || true) && " # some protections
 exec_cmd = "(rm -rf rxwgan || true) && " # some protections
 

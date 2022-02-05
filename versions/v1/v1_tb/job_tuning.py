@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
-try:
-  from tensorflow.compat.v1 import ConfigProto
-  from tensorflow.compat.v1 import InteractiveSession
-  config = ConfigProto()
-  config.gpu_options.allow_growth = True
-  session = InteractiveSession(config=config)
-except Exception as e:
-  print(e)
-  print("Not possible to set gpu allow growth")
+
+# NOTE: mandatory
+try: 
+    from orchestra import complete, start, is_test_job
+    is_job = True
+except:
+    is_job = False
 
 
 import pandas as pd
 import numpy as np
 import argparse
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from rxwgan.models import *
-from rxwgan.wgangp import wgangp_optimizer
-
-from rxcore.stratified_kfold import stratified_train_val_test_splits
 import tensorflow as tf  
 import json
+from rxwgan.models import *
+from rxwgan.wgangp import wgangp_optimizer
+from rxcore import stratified_train_val_test_splits
 
+# NOTE: this is optional.
+from rxcore import allow_tf_growth
+allow_tf_growth()
+
+
+#
+# Input args (mandatory!)
+#
 parser = argparse.ArgumentParser(description = '', add_help = False)
 parser = argparse.ArgumentParser()
 
@@ -38,36 +43,6 @@ parser.add_argument('-j','--job', action='store',
 
 
 
-
-#
-# Train parameters
-#
-
-parser.add_argument('--batch_size', action='store', 
-    dest='batch_size', required = False, default = 32, type=int,
-    help = "train batch_size")
-
-parser.add_argument('--epochs', action='store', 
-    dest='epochs', required = False, default = 1000, type=int,
-    help = "Number of epochs.")
-
-parser.add_argument('--n_discr', action='store', 
-    dest='n_discr', required = False, default = 0, type=int, 
-    help = "Update the discriminator after n batches.")
-
-parser.add_argument('--save_for_each', action='store', 
-    dest='save_for_each', required = False, default = 50, type=int, 
-    help = "Save model after N epochs.")
-
-parser.add_argument('--disp_for_each', action='store', 
-    dest='disp_for_each', required = False, default = 50, type=int, 
-    help = "Save plots after N epochs.")
-
-parser.add_argument('--seed', action='store', 
-    dest='seed', required = False, default = 512, type=int, 
-    help = "Seed value to initialize the k fold stage.")
-
-
 import sys,os
 if len(sys.argv)==1:
   parser.print_help()
@@ -75,32 +50,35 @@ if len(sys.argv)==1:
 
 args = parser.parse_args()
 
-def lock_as_completed_job(output):
-  with open(output+'/.complete','w') as f:
-    f.write('complete')
-
-def lock_as_failed_job(output):
-  with open(output+'/.failed','w') as f:
-    f.write('failed')
 
 try:
+
+    if is_job: start()
+
+    #
+    # Start your job here
+    #
+
     job  = json.load(open(args.job, 'r'))
     sort = job['sort']
     target = 1 # tb active
     test = job['test']
+    seed = 512
+    epochs = 1000
+    batch_size = 32
 
     output_dir = args.volume + '/test_%d_sort_%d'%(test,sort)
 
     #
     # Check if we need to recover something...
     #
-    if os.path.exists(output_dir+'/recover.json'):
-        print('Enable recover mode.')
-        recover = json.load(open(output_dir+'/recover.json', 'r'))
-        history = json.load(open(recover['history'], 'r'))
-        critic = tf.keras.models.load_model(recover['critic'])
-        generator = tf.keras.models.load_model(recover['generator'])
-        start_from_epoch = recover['epoch'] + 1
+    if os.path.exists(output_dir+'/checkpoint.json'):
+        print('reading from last checkpoint...')
+        checkpoint = json.load(open(output_dir+'/checkpoint.json', 'r'))
+        history = json.load(open(checkpoint['history'], 'r'))
+        critic = tf.keras.models.load_model(checkpoint['critic'])
+        generator = tf.keras.models.load_model(checkpoint['generator'])
+        start_from_epoch = checkpoint['epoch'] + 1
         print('starts from %d epoch...'%start_from_epoch)
     else:
         start_from_epoch= 0
@@ -112,27 +90,26 @@ try:
     height = critic.layers[0].input_shape[0][1]
     width  = critic.layers[0].input_shape[0][2]
 
-
+    # Read dataframe
     dataframe = pd.read_csv(args.input)
 
 
-    splits = stratified_train_val_test_splits(dataframe,args.seed)[test]
+    splits = stratified_train_val_test_splits(dataframe,seed)[test]
     training_data   = dataframe.iloc[splits[sort][0]]
     validation_data = dataframe.iloc[splits[sort][1]]
 
     training_data = training_data.loc[training_data.target==target]
     validation_data = validation_data.loc[validation_data.target==target]
 
-    extra_d = {'sort' : sort, 'test':test, 'target':target, 'seed':args.seed}
+    extra_d = {'sort' : sort, 'test':test, 'target':target, 'seed':seed}
 
     # image generator
     datagen = ImageDataGenerator( rescale=1./255 )
 
-
     train_generator = datagen.flow_from_dataframe(training_data, directory = None,
                                                   x_col = 'raw_image_path', 
                                                   y_col = 'target',
-                                                  batch_size = args.batch_size,
+                                                  batch_size = batch_size,
                                                   target_size = (height,width), 
                                                   class_mode = 'raw', 
                                                   shuffle = True,
@@ -141,29 +118,24 @@ try:
     val_generator   = datagen.flow_from_dataframe(validation_data, directory = None,
                                                   x_col = 'raw_image_path', 
                                                   y_col = 'target',
-                                                  batch_size = args.batch_size,
+                                                  batch_size = batch_size,
                                                   class_mode = 'raw',
                                                   target_size = (height,width),
                                                   shuffle = True,
                                                   color_mode = 'grayscale')
 
-
-
-
     #
     # Create optimizer
     #
 
-    is_test = os.getenv('LOCAL_TEST')
-
     optimizer = wgangp_optimizer( critic, generator, 
-                                  n_discr = args.n_discr,
+                                  n_discr = 0,
                                   history = history,
-                                  start_from_epoch = 0 if is_test else start_from_epoch,
-                                  max_epochs = 1 if is_test else args.epochs, 
+                                  start_from_epoch = 0 if is_test_job() else start_from_epoch,
+                                  max_epochs = 1 if is_test_job() else epochs, 
                                   output_dir = output_dir,
-                                  disp_for_each = args.disp_for_each, 
-                                  save_for_each = args.save_for_each )
+                                  disp_for_each = 50, 
+                                  save_for_each = 50 )
 
 
     # Run!
@@ -175,12 +147,15 @@ try:
     with open(output_dir+'/history.json', 'w') as handle:
       json.dump(history, handle,indent=4)
 
-    # necessary to work on orchestra
-    lock_as_completed_job(args.volume if args.volume else '.')
+    #
+    # End your job here
+    #
+
+    if is_job: complete()
     sys.exit(0)
 
 except  Exception as e:
     print(e)
     # necessary to work on orchestra
-    lock_as_failed_job(args.volume if args.volume else '.')
+    if is_job: fail()
     sys.exit(1)
