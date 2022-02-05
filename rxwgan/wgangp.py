@@ -6,9 +6,6 @@ import numpy as np
 import itertools
 import tensorflow as tf
 from tqdm import tqdm
-from rxwgan import declare_property
-from rxwgan.plots import plot_evolution
-from rxwgan.stats import calculate_divergences, calculate_l1_and_l2_norm_errors, eps
 import matplotlib.pyplot as plt
 import os
 import json
@@ -16,7 +13,8 @@ import json
 import atlas_mpl_style as ampl
 ampl.use_atlas_style()
 
-
+from rxcore import declare_property
+from rxcore.stats import calculate_divergences, calculate_l1_and_l2_norm_errors, eps
 
 class wgangp_optimizer(object):
 
@@ -206,7 +204,7 @@ class wgangp_optimizer(object):
         with open(output+'/history_epoch_%d.json'%epoch, 'w') as handle:
           json.dump(self.history, handle,indent=4)
 
-        with open(output+'/recover.json', 'w') as handle:
+        with open(output+'/checkpoint.json', 'w') as handle:
           d = {'epoch'     :epoch, 
                'history'   : output+'/history_epoch_%d.json'%epoch,
                'critic'    : output+'/critic_epoch_%d.h5'%epoch,
