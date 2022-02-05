@@ -54,7 +54,6 @@ for test in tests:
         d = {   
                 'sort'   : sort,
                 'test'   : test,
-                'target' : args.target,
                 'seed'   : args.seed,
 
             }

@@ -46,7 +46,7 @@ class wgangp_optimizer(object):
   #
   # Train models
   #
-  def fit(self, train_generator, val_generator = None, extra_d=None ):
+  def fit(self, train_generator, val_generator = None, extra_d=None , wandb=None):
 
     if self.output_dir is not None:
       output = self.output_dir
@@ -194,8 +194,16 @@ class wgangp_optimizer(object):
                % (epoch, perc, self.history['train_critic_loss'][-1], self.history['train_gen_loss'][-1]))
 
 
+      if wandb:
+        log = {}
+        for key in self.history.keys():
+          log[key] = self.history[key][-1]
+        wandb.log(log)
+
+
       if self.disp_for_each and ( (epoch % self.disp_for_each)==0 ):
-        self.display_images(epoch, output)
+        self.display_images(epoch, output, wandb=wandb)
+       
 
       # in case of panic, save it
       if self.save_for_each and ( (epoch % self.save_for_each)==0 ):
@@ -329,7 +337,7 @@ class wgangp_optimizer(object):
 
 
 
-  def display_images(self, epoch, output):
+  def display_images(self, epoch, output, wandb=None):
     # disp plot
     fake_samples = self.generate(25)
     fig = plt.figure(figsize=(10, 10))
@@ -339,7 +347,10 @@ class wgangp_optimizer(object):
        plt.imshow(fake_samples[i],cmap='gray')
     if self.notebook:
       plt.show()
-    fig.savefig(output + '/fake_samples_epoch_%d.pdf'%epoch)
+    figname = output + '/fake_samples_epoch_%d.pdf'%epoch
+    fig.savefig(figname)
+    if wandb:
+      wandb.log({'fake_samples':plt})
 
 
   def display_hists( self, epoch, output, real_output, fake_output, bins=50):
