@@ -42,6 +42,10 @@ parser.add_argument('-j','--job', action='store',
     dest='job', required = True, default = None, 
     help = "job configuration.")
 
+parser.add_argument('--disable_wandb', action='store_true', 
+    dest='disable_wandb', required = False, 
+    help = "Disable wandb report")
+
 
 
 import sys,os
@@ -140,12 +144,15 @@ try:
 
     
     try:
-        import wandb
-        task = args.volume.split('/')[-2]
-        name = 'test_%d_sort_%d'%(test,sort)
-        wandb.init(project=task,
-                   name=name,
-                   id=name)
+        if args.disable_wandb:
+            wandb=None
+        else:
+            import wandb
+            task = args.volume.split('/')[-2]
+            name = 'test_%d_sort_%d'%(test,sort)
+            wandb.init(project=task,
+                       name=name,
+                       id=name)
 
     except:
         wandb=None
