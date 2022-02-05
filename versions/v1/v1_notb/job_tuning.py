@@ -2,11 +2,12 @@
 
 # NOTE: mandatory
 try: 
-    from orchestra import complete, start, is_test_job
+    from orchestra import complete, start, fail, is_test_job
     is_job = True
+    is_test = is_test_job()
 except:
     is_job = False
-
+    is_test = False
 
 import pandas as pd
 import numpy as np
@@ -41,6 +42,10 @@ parser.add_argument('-j','--job', action='store',
     dest='job', required = True, default = None, 
     help = "job configuration.")
 
+parser.add_argument('--disable_wandb', action='store_true', 
+    dest='disable_wandb', required = False, 
+    help = "Disable wandb report")
+
 
 
 import sys,os
@@ -61,7 +66,7 @@ try:
 
     job  = json.load(open(args.job, 'r'))
     sort = job['sort']
-    target = 0 # no tb
+    target = 0
     test = job['test']
     seed = 512
     epochs = 1000
@@ -131,15 +136,30 @@ try:
     optimizer = wgangp_optimizer( critic, generator, 
                                   n_discr = 0,
                                   history = history,
-                                  start_from_epoch = 0 if is_test_job() else start_from_epoch,
-                                  max_epochs = 1 if is_test_job() else epochs, 
+                                  start_from_epoch = 0 if is_test else start_from_epoch,
+                                  max_epochs = 1 if is_test else epochs, 
                                   output_dir = output_dir,
                                   disp_for_each = 50, 
                                   save_for_each = 50 )
 
+    
+    try:
+        if args.disable_wandb:
+            wandb=Nones
+        else:
+            import wandb
+            task = args.volume.split('/')[-2]
+            name = 'test_%d_sort_%d'%(test,sort)
+            wandb.init(project=task,
+                       name=name,
+                       id=name)
+
+    except:
+        wandb=None
+
 
     # Run!
-    history = optimizer.fit( train_generator , val_generator, extra_d=extra_d )
+    history = optimizer.fit( train_generator , val_generator, extra_d=extra_d, wandb=wandb )
 
     # in the end, save all by hand
     critic.save(output_dir + '/critic_trained.h5')
