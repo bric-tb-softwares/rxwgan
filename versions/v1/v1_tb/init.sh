@@ -11,3 +11,6 @@ git clone https://github.com/bric-tb-softwares/rxwgan.git
 # setup into the python path
 cd rxcore && export PYTHONPATH=$PYTHONPATH:$PWD/rxcore && cd ..
 cd rxwgan && export PYTHONPATH=$PYTHONPATH:$PWD/rxwgan && cd ..
+
+echo $PYTHONPATH
+ls -lisah
