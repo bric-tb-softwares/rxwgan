@@ -3,30 +3,13 @@ basepath = os.getcwd()
 
 path = basepath
 
-#
-# Prepare my job script!
-#
 
-# remove all by hand in case of job retry... NOTE: some jobs needs to recover s
-exec_cmd = "(rm -rf rxcore || true) && " # some protections
-exec_cmd+= "(rm -rf rxwgan || true) && " # some protections
-exec_cmd+= "(rm -rf wandb || true) && " # some protections
 
-exec_cmd+= "export WANDB_API_KEY=$WANDB_API_KEY && "
-#exec_cmd+= "wandb login --relogin"
-# download all necessary local packages...
-exec_cmd+= "git clone https://github.com/bric-tb-softwares/rxcore.git && "
-exec_cmd+= "git clone https://github.com/bric-tb-softwares/rxwgan.git && "
-# setup into the python path
-exec_cmd+= "cd rxcore && export PYTHONPATH=$PYTHONPATH:$PWD/rxcore && cd .. && "
-exec_cmd+= "cd rxwgan && export PYTHONPATH=$PYTHONPATH:$PWD/rxwgan && cd .. && "
+exec_cmd = "source {PATH}/init.sh && "
+exec_cmd+= "python {PATH}/job_tuning.py -j %IN -i %DATA -v %OUT && "
+exec_cmd+= "source {PATH}/end.sh"
 
-# execute my job!
-exec_cmd+= "python rxwgan/versions/v1/v1_tb/job_tuning.py -j %IN -i %DATA -v %OUT && "
 
-# if complete, remove some dirs...
-exec_cmd+= "rm -rf rxwgan && rm -rf rxcore && "
-exec_cmd+= "(rm -rf wandb || true)" # some protections
 
 command = """maestro.py task create \
   -v {PATH} \

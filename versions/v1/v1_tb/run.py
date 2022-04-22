@@ -1,28 +1,22 @@
 #!/usr/bin/env python3
 
-# NOTE: mandatory
-try: 
-    from orchestra import complete, start, fail, is_test_job
-    is_job = True
-    is_test = is_test_job()
-except:
-    is_job = False
-    is_test = False
 
 import pandas as pd
 import numpy as np
-import argparse
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-import tensorflow as tf  
-import json
+import argparse, traceback, json, os
 from rxwgan.models import *
 from rxwgan.wgangp import wgangp_optimizer
-from rxcore import stratified_train_val_test_splits
+from colorama import Back, Fore
 
-# NOTE: this is optional.
+from rxcore import stratified_train_val_test_splits
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import tensorflow as tf 
+
 from rxcore import allow_tf_growth
 allow_tf_growth()
 
+# NOTE: for orchestra 
+is_test = True if 'TEST_JOB' in os.environ.keys() else False
 
 #
 # Input args (mandatory!)
@@ -58,7 +52,6 @@ args = parser.parse_args()
 
 try:
 
-    if is_job: start()
 
     #
     # Start your job here
@@ -70,21 +63,21 @@ try:
     test = job['test']
     seed = 512
     epochs = 1000
-    batch_size = 32
+    batch_size = 8
 
-    output_dir = args.volume + '/test_%d_sort_%d'%(test,sort)
 
     #
     # Check if we need to recover something...
     #
-    if os.path.exists(output_dir+'/checkpoint.json'):
-        print('reading from last checkpoint...')
-        checkpoint = json.load(open(output_dir+'/checkpoint.json', 'r'))
+    if os.path.exists(args.volume+'/checkpoint.json'):
+        print(Back.RED + Fore.WHITE + 'reading from last checkpoint...')
+
+        checkpoint = json.load(open(args.volume+'/checkpoint.json', 'r'))
         history = json.load(open(checkpoint['history'], 'r'))
         critic = tf.keras.models.load_model(checkpoint['critic'])
         generator = tf.keras.models.load_model(checkpoint['generator'])
         start_from_epoch = checkpoint['epoch'] + 1
-        print('starts from %d epoch...'%start_from_epoch)
+        print(Back.RED + Fore.WHITE + 'starts from %d epoch...'%start_from_epoch)
     else:
         start_from_epoch= 0
         # create models
@@ -99,11 +92,10 @@ try:
     dataframe = pd.read_csv(args.input)
 
 
-    splits = stratified_train_val_test_splits(dataframe,seed)[test]
+    splits = stratified_train_val_test_splits(dataframe,10,seed)[test]
     training_data   = dataframe.iloc[splits[sort][0]]
     validation_data = dataframe.iloc[splits[sort][1]]
-
-    training_data = training_data.loc[training_data.target==target]
+    training_data   = training_data.loc[training_data.target==target]
     validation_data = validation_data.loc[validation_data.target==target]
 
     extra_d = {'sort' : sort, 'test':test, 'target':target, 'seed':seed}
@@ -138,9 +130,9 @@ try:
                                   history = history,
                                   start_from_epoch = 0 if is_test else start_from_epoch,
                                   max_epochs = 1 if is_test else epochs, 
-                                  output_dir = output_dir,
-                                  disp_for_each = 50, 
-                                  save_for_each = 50 )
+                                  volume = args.volume,
+                                  disp_for_each = 10, 
+                                  save_for_each = 200 )
 
     
     try:
@@ -162,20 +154,17 @@ try:
     history = optimizer.fit( train_generator , val_generator, extra_d=extra_d, wandb=wandb )
 
     # in the end, save all by hand
-    critic.save(output_dir + '/critic_trained.h5')
-    generator.save(output_dir + '/generator_trained.h5')
-    with open(output_dir+'/history.json', 'w') as handle:
+    critic.save(args.volume + '/critic_trained.h5')
+    generator.save(args.volume + '/generator_trained.h5')
+    with open(args.volume+'/history.json', 'w') as handle:
       json.dump(history, handle,indent=4)
 
     #
     # End your job here
     #
 
-    if is_job: complete()
     sys.exit(0)
 
 except  Exception as e:
-    print(e)
-    # necessary to work on orchestra
-    if is_job: fail()
+    traceback.print_exc()
     sys.exit(1)

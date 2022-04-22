@@ -16,6 +16,11 @@ ampl.use_atlas_style()
 from rxcore import declare_property
 from rxcore.stats import calculate_divergences, calculate_l1_and_l2_norm_errors, eps
 
+
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.InteractiveSession(config=config)
+
 class wgangp_optimizer(object):
 
   def __init__(self, critic, generator, **kw ):
@@ -205,23 +210,29 @@ class wgangp_optimizer(object):
         self.display_images(epoch, output, wandb=wandb)
        
 
-      # in case of panic, save it
       if self.save_for_each and ( (epoch % self.save_for_each)==0 ):
         self.critic.save(output+'/critic_epoch_%d.h5'%epoch)
         self.generator.save(output+'/generator_epoch_%d.h5'%epoch)
         with open(output+'/history_epoch_%d.json'%epoch, 'w') as handle:
           json.dump(self.history, handle,indent=4)
 
-        with open(output+'/checkpoint.json', 'w') as handle:
-          d = {'epoch'     :epoch, 
-               'history'   : output+'/history_epoch_%d.json'%epoch,
-               'critic'    : output+'/critic_epoch_%d.h5'%epoch,
-               'generator' : output+'/generator_epoch_%d.h5'%epoch,
-          }
 
-          if extra_d:
-            d.update(extra_d)
-          json.dump(d, handle,indent=4)
+      # in case of panic, save it
+      self.critic.save(output+'/critic_latest.h5')
+      self.generator.save(output+'/generator_latest.h5')
+      with open(output+'/history_latest.json', 'w') as handle:
+        json.dump(self.history, handle,indent=4)
+      # Latest model always
+      with open(output+'/checkpoint.json', 'w') as handle:
+        d = {'epoch'     :epoch, 
+             'history'   : output+'/history_latest.json',
+             'critic'    : output+'/critic_latest.h5',
+             'generator' : output+'/generator_latest.h5',
+        }
+        if extra_d:
+          d.update(extra_d)
+        json.dump(d, handle,indent=4)
+    
 
     return self.history
 
