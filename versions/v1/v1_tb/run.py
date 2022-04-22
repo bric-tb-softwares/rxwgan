@@ -16,7 +16,7 @@ from rxcore import allow_tf_growth
 allow_tf_growth()
 
 # NOTE: for orchestra 
-is_test = True if 'TEST_JOB' in os.environ.keys() else False
+is_test = True if 'LOCAL_TEST' in os.environ.keys() else False
 
 #
 # Input args (mandatory!)
@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser(description = '', add_help = False)
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-v','--volume', action='store', 
-    dest='volume', required = False,
+    dest='volume', required = False, default=os.getcwd(),
     help = "volume path")
 
 parser.add_argument('-i','--input', action='store', 
