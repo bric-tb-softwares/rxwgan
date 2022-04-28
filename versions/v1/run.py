@@ -41,6 +41,11 @@ parser.add_argument('-j','--job', action='store',
     dest='job', required = True, default = None, 
     help = "job configuration.")
 
+parser.add_argument('-t','--target', action='store', 
+    dest='target', required = True, default = 1, type=int, 
+    help = "the target (1 tb / 0 notb)")
+
+
 parser.add_argument('--disable_wandb', action='store_true', 
     dest='disable_wandb', required = False, 
     help = "Disable wandb report")
@@ -64,7 +69,7 @@ try:
 
     job  = json.load(open(args.job, 'r'))
     sort = job['sort']
-    target = 1 # tb active
+    target = args.target # tb active
     test = job['test']
     seed = 512
     epochs = 1000
